@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calculadora de Tarifas de Transporte de Gas - SNT</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand-mark">⛽</span>
+      <h1>Calculadora de Tarifas de Transporte de Gas</h1>
+      <p class="subtitle">Sistema Nacional de Transporte (SNT) &middot; TGI · Promigas</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel panel-form" aria-label="Opciones de calculo">
+      <h2 class="panel-title">Ruta y opciones</h2>
+
+      <div class="field">
+        <label for="origen">Origen</label>
+        <select id="origen"></select>
+      </div>
+
+      <div class="field">
+        <label for="destino">Destino</label>
+        <select id="destino"></select>
+      </div>
+
+      <div class="field campo-con-nota">
+        <label for="cf">
+          Cargo Fijo / Cargo Variable
+          <button id="btn-info-cf" class="btn-info" type="button"
+                  aria-label="Que significa cada combinacion"
+                  aria-expanded="false" aria-controls="nota-cf">&#9432;</button>
+        </label>
+        <select id="cf">
+          <option value="1.00">100% Fijo / 0% Variable</option>
+          <option value="0.85">85% Fijo / 15% Variable</option>
+          <option value="0.70">70% Fijo / 30% Variable</option>
+          <option value="0.50">50% Fijo / 50% Variable</option>
+          <option value="0.30">30% Fijo / 70% Variable</option>
+          <option value="0.15">15% Fijo / 85% Variable</option>
+          <option value="0.00" selected>0% Fijo / 100% Variable</option>
+        </select>
+
+        <div id="nota-cf" class="nota-flotante" role="dialog"
+             aria-label="Que significa cada combinacion" hidden>
+          <p>
+            <strong>0 - 100</strong> (Tarifa mas cara)<br />
+            <strong>100 - 0</strong> (Tarifa mas barata)
+          </p>
+          <button class="btn-cerrar-nota" type="button" data-cerrar-nota>Entendido</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="trm">TRM (COP por USD)</label>
+        <input id="trm" type="number" min="0" step="0.01" value="4000" />
+        <span id="trm-nota" class="campo-nota">Consultando la TRM del dia...</span>
+      </div>
+
+      <!-- Cargos de TGI: plegado por defecto. Trae 3% de fomento y 6% de
+           impuesto puestos de entrada; se abre solo si se quieren cambiar. -->
+      <div class="bloque-plegable" id="bloque-tgi">
+        <div class="bloque-cabecera">
+          <button id="btn-tgi" class="bloque-toggle" type="button"
+                  aria-expanded="false" aria-controls="cuerpo-tgi">
+            <span class="chevron" aria-hidden="true">▸</span>
+            Cargos de <strong>TGI</strong>
+          </button>
+          <button id="btn-info-tgi" class="btn-info" type="button"
+                  aria-label="Como se aplican los cargos de TGI"
+                  aria-expanded="false" aria-controls="nota-tgi">ⓘ</button>
+        </div>
+
+        <div id="cuerpo-tgi" class="bloque-cuerpo" hidden>
+          <div class="field">
+            <label for="impuesto">Impuesto local TGI</label>
+            <select id="impuesto">
+              <option value="0.00">0% - Sin impuesto local</option>
+              <option value="0.02">2% - Impuesto especial municipal</option>
+              <option value="0.06" selected>6% - Impuesto especial municipal</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fomento">Cuota de fomento TGI</label>
+            <input id="fomento" type="number" min="0" step="0.1" value="3" />
+            <span class="field-suffix">%</span>
+          </div>
+        </div>
+
+        <!-- Nota flotante: se abre desde el boton de informacion de la cabecera -->
+        <div id="nota-tgi" class="nota-flotante" role="dialog"
+             aria-label="Como se aplican los cargos" hidden>
+          <p>
+            Estas dos opciones aplican <strong>solo a TGI</strong>. PROMIGAS se liquida
+            <strong>automaticamente</strong> con 3% de cuota de fomento y 6% de impuesto
+            local, y no se puede modificar aqui. Si la ruta usa las dos redes, cada
+            transportador cobra su estampilla, su fomento y su impuesto por separado.
+          </p>
+          <button class="btn-cerrar-nota" type="button" data-cerrar-nota>Entendido</button>
+        </div>
+      </div>
+
+      <!-- Totales: van al pie del panel, donde antes estaba el boton de calcular -->
+      <div id="tarjetas" class="result-cards" hidden>
+        <div class="result-card">
+          <span class="result-card-label">Total COP/KPC</span>
+          <span id="out-total-cop" class="result-card-value">-</span>
+        </div>
+        <div class="result-card result-card-accent">
+          <span class="result-card-label">Total USD/KPC</span>
+          <span id="out-total-usd" class="result-card-value">-</span>
+        </div>
+      </div>
+
+      <p id="ruta-invalida" class="warning" hidden></p>
+    </section>
+
+    <section class="panel panel-results" aria-label="Resultados">
+      <!-- Todo en la misma linea del titulo: el mensaje de "elige una ruta"
+           cuando no hay nada, o la ruta y el boton de detalle cuando si. -->
+      <div class="panel-cabecera">
+        <h2 class="panel-title">Resultado</h2>
+
+        <p id="empty-state" class="cabecera-mensaje">
+          Elige un <strong>origen</strong> y un <strong>destino</strong>, en las listas o
+          haciendo clic sobre el mapa.
+        </p>
+
+        <p id="ruta-linea" class="ruta-texto" hidden>
+          <strong>Ruta:</strong> <span id="out-ruta">-</span>
+        </p>
+
+        <button id="btn-tabla" class="btn btn-secundario" type="button"
+                aria-expanded="false" aria-controls="panel-tabla" hidden>
+          Ver detalle de la tarifa
+        </button>
+
+        <button id="btn-descargar" class="btn btn-icono" type="button"
+                aria-label="Descargar la tabla como imagen"
+                title="Descargar la tabla como imagen">⬇</button>
+      </div>
+
+      <div id="panel-tabla" class="panel-tabla" hidden>
+        <div class="table-scroll">
+          <table class="table table-detalle" aria-label="Detalle de la tarifa">
+            <thead>
+              <tr>
+                <th>Tramo</th>
+                <th>Transportador</th>
+                <th>Fijos (COP)</th>
+                <th>Variables (COP)</th>
+                <th>AOM (COP)</th>
+                <th>T. tramo (COP)</th>
+              </tr>
+            </thead>
+            <tbody id="out-detalle-body"></tbody>
+          </table>
+        </div>
+        <p id="nota-omitidos" class="tabla-nota" hidden></p>
+      </div>
+
+      <!-- El mapa queda FUERA de #results: debe verse y poder clicarse
+           aunque todavia no haya origen ni destino elegidos. -->
+      <div class="mapa-marco">
+        <svg id="mapa" role="img"
+             aria-label="Mapa de Colombia con la red de gasoductos del Sistema Nacional de Transporte"></svg>
+
+        <!-- Zoom sobre la ruta: se coloca justo debajo del localizador -->
+        <div id="zoom-mapa" class="zoom-mapa" hidden>
+          <button id="btn-zoom-mas" class="btn-zoom" type="button"
+                  aria-label="Acercar a la ruta" title="Acercar a la ruta">+</button>
+          <span id="zoom-nivel" class="zoom-nivel">0/3</span>
+          <button id="btn-zoom-menos" class="btn-zoom" type="button"
+                  aria-label="Alejar" title="Alejar">−</button>
+        </div>
+
+        <div id="caja-mapa" class="caja-mapa">
+          <button id="btn-caja-mapa" class="caja-mapa-cabecera" type="button"
+                  aria-expanded="true" aria-controls="caja-mapa-cuerpo">
+            <span>Referencias</span>
+            <span class="chevron" aria-hidden="true">▾</span>
+          </button>
+
+          <div id="caja-mapa-cuerpo" class="caja-mapa-cuerpo">
+            <p class="caja-ayuda">
+              Clic en un punto para asignarlo. Siguiente clic define:
+              <strong id="mapa-modo">Origen</strong>.
+            </p>
+
+            <h3 class="leyenda-titulo">Gasoductos</h3>
+            <ul class="mapa-leyenda">
+              <li><span class="leyenda-linea l-tgi"></span> TGI</li>
+              <li><span class="leyenda-linea l-promigas"></span> PROMIGAS</li>
+              <li><span class="leyenda-linea l-activa"></span> Ruta calculada</li>
+            </ul>
+
+            <h3 class="leyenda-titulo">Puntos</h3>
+            <ul class="mapa-leyenda">
+              <li><span class="leyenda-punto p-origen"></span> Origen</li>
+              <li><span class="leyenda-punto p-destino"></span> Destino</li>
+              <li><span class="leyenda-punto p-entrada"></span> Punto de entrada</li>
+              <li><span class="leyenda-punto p-normal"></span> Otro punto</li>
+            </ul>
+
+            <p class="mapa-nota">
+              Ubicaciones, trazados y lago <strong>aproximados</strong>, sobre la
+              lamina oficial del SNT.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- El aviso de ruta combinada va debajo del mapa -->
+      <p id="aviso-combinada" class="aviso-combinada" hidden></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      Tarifas vigentes del SNT tomadas del archivo de tramos del usuario. AOM se cobra 100% independiente del %CF.
+      La cuota de fomento y el impuesto local se liquidan por transportador: TGI es editable arriba;
+      PROMIGAS aplica 3% de fomento y 6% de impuesto de forma automatica.
+      Este calculo es una herramienta de apoyo y no reemplaza la verificacion contra las resoluciones CREG vigentes.
+    </p>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/colombia.js"></script>
+  <script src="js/ubicaciones.js"></script>
+  <script src="js/graph.js"></script>
+  <script src="js/mapa.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

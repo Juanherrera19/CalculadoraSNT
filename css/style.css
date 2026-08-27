@@ -1,0 +1,923 @@
+/* Calculadora de Tarifas SNT
+   Paleta: azul marino oscuro + blanco + grises pizarra, con verde y azul de
+   acento (tomada del panel de referencia del usuario).
+
+   TEMA CLARO FIJO: la pagina NO sigue `prefers-color-scheme`. Se quito el
+   bloque de modo oscuro a peticion del usuario (ver docs/DECISIONES.md D14),
+   asi que se ve igual aunque el sistema este en modo oscuro. Si algun dia se
+   quiere volver a tener modo oscuro, hay que reintroducir un bloque que
+   redefina TODAS las variables de :root.
+
+   Los colores del mapa (relleno, TGI rojo, PROMIGAS azul) son los del mapa
+   oficial del Sistema Nacional de Transporte. */
+
+:root {
+  /* obliga a los controles nativos (select, input, scrollbars) a verse claros
+     aunque el sistema operativo este en modo oscuro */
+  color-scheme: light;
+
+  --bg: #f1f4f8;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --surface-3: #e9eef5;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --text: #16283f;
+  --text-muted: #64748b;
+
+  --navy: #0f2544;          /* barra superior */
+  --navy-2: #123a63;        /* boton primario / acentos oscuros */
+  --navy-3: #1d4f83;
+
+  --verde: #2e9e63;         /* acento positivo */
+  --azul: #1d6fa5;          /* acento informativo */
+  --azul-suave: #e7f0f7;
+
+  --warn: #b3261e;
+  --warn-suave: #fdecea;
+
+  --shadow: 0 1px 2px rgba(15, 37, 68, 0.06), 0 6px 20px rgba(15, 37, 68, 0.06);
+
+  /* Mapa: colores tomados de la lamina oficial del SNT */
+  --tgi: #e2231a;           /* rojo TGI */
+  --promigas: #12b76a;      /* verde Promigas, mas vivo para que resalte */
+  --ruta: #2f5fd0;          /* la ruta calculada va toda de un mismo azul */
+  --mapa-tierra: #c3c9dd;   /* relleno del pais, azul lavanda */
+  --mapa-depto: #ffffff;    /* limites departamentales, en blanco */
+  --mapa-borde: #9aa3bb;
+  --mapa-fondo: #fbfbfc;    /* fuera del pais */
+  --inset-tierra: #a8b1cb;  /* del mismo azul que la tierra del mapa grande */
+  --inset-depto: #ffffff;   /* sus limites departamentales */
+  --mapa-vecino: #e4e6ee;   /* Panama y Venezuela: contexto, mas apagados */
+  --mapa-vecino-borde: #c8ccda;
+  --rotulo: #5b7397;        /* nombre del lago */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+}
+
+h1, h2, h3 { margin: 0; }
+
+/* ---------- Barra superior ---------- */
+.topbar { background: var(--navy); color: #fff; }
+.topbar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 10px 24px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.brand-mark { font-size: 1.15rem; line-height: 1; }
+.topbar h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+/* el subtitulo va al lado del titulo, no debajo: la barra queda mas baja */
+.subtitle { margin: 0; font-size: 0.78rem; color: #a9bcd6; }
+
+/* ---------- Layout ---------- */
+.layout {
+  max-width: 1180px;
+  margin: 22px auto 56px;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  /* min-width:0 -> sin esto el panel no puede encoger por debajo del ancho
+     de su contenido (el mapa) y desborda en pantallas angostas */
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.panel-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+/* Cabecera del resultado, todo en una linea: titulo, mensaje o ruta,
+   boton de detalle y el de imprimir. */
+.panel-cabecera {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+.panel-cabecera .panel-title { margin-bottom: 0; flex: none; }
+
+/* mensaje de "elige una ruta" y linea de ruta: comparten el hueco del medio y
+   se recortan con puntos suspensivos en vez de crecer hacia abajo */
+.cabecera-mensaje,
+.panel-cabecera .ruta-texto {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+/* el mensaje corto va en una linea; la ruta se desborda a las siguientes */
+.cabecera-mensaje { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-cabecera .ruta-texto { white-space: normal; overflow-wrap: anywhere; }
+.cabecera-mensaje[hidden], .ruta-texto[hidden], #btn-tabla[hidden] { display: none; }
+.panel-cabecera .ruta-texto strong { color: var(--text); }
+.panel-cabecera .btn { flex: none; }
+
+/* imprimir: solo el icono */
+.btn-icono {
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: var(--surface);
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+}
+.btn-icono:hover { background: var(--surface-2); color: var(--text); }
+
+/* ---------- Formulario ---------- */
+.field { margin-bottom: 14px; position: relative; }
+.campo-con-nota { position: relative; }
+.field label .btn-info { vertical-align: -2px; margin-left: 2px; }
+
+.field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.field select,
+.field input {
+  width: 100%;
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  appearance: none;
+}
+.field select:focus,
+.field input:focus {
+  outline: none;
+  border-color: var(--navy-3);
+  box-shadow: 0 0 0 3px var(--azul-suave);
+}
+/* pie de un campo: de donde salio el valor, o por que no se pudo traer */
+.campo-nota {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.campo-nota.error { color: var(--warn); }
+
+.field-suffix {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* --- Bloque plegable (Cargos de TGI) --- */
+.bloque-plegable {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  margin: 4px 0 16px;
+}
+.bloque-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+}
+.bloque-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.bloque-toggle .chevron { color: var(--text-muted); font-size: 0.7rem; }
+.bloque-toggle:hover { color: var(--navy-2); }
+.btn-info {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--azul);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.btn-info:hover { background: var(--azul-suave); }
+.bloque-cuerpo { padding: 0 12px 2px; }
+
+/* nota flotante de los cargos de TGI */
+.nota-flotante {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% - 4px);
+  right: 6px;
+  width: 260px;
+  max-width: calc(100vw - 40px);
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: 0 8px 26px rgba(15, 37, 68, 0.20);
+}
+.nota-flotante[hidden] { display: none; }
+.nota-flotante p {
+  margin: 0 0 10px;
+  font-size: 0.73rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.btn-cerrar-nota {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--navy-2);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.tag-editable { background: var(--azul-suave); color: var(--azul); }
+.tag-auto {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-primary {
+  width: 100%;
+  background: var(--navy-2);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--navy-3); }
+.btn-secundario {
+  background: var(--surface);
+  color: var(--navy-2);
+  border-color: var(--border-strong);
+  white-space: nowrap;
+}
+.btn-secundario:hover { background: var(--surface-2); border-color: var(--navy-3); }
+.btn-secundario[aria-expanded="true"] {
+  background: var(--navy-2);
+  color: #fff;
+  border-color: var(--navy-2);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.22); }
+
+.warning {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--warn);
+  background: var(--warn-suave);
+  border: 1px solid var(--warn);
+  border-radius: 7px;
+}
+
+/* ---------- Resultados ---------- */
+
+/* Totales: compactos, al pie del panel de opciones */
+.result-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+.result-cards[hidden] { display: none; }
+.result-card {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--navy-2);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.result-card-accent { background: var(--verde); }
+.result-card-label {
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.result-card-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aviso-combinada {
+  background: var(--azul-suave);
+  border-left: 4px solid var(--azul);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  margin: 12px 0 0;
+}
+.aviso-combinada[hidden] { display: none; }
+.aviso-combinada em { font-style: normal; font-weight: 600; }
+
+
+.section-title { font-size: 0.95rem; color: var(--text); margin: 20px 0 4px; }
+.section-note { font-size: 0.74rem; color: var(--text-muted); margin: 0 0 10px; line-height: 1.5; }
+
+/* ---------- Tablas ---------- */
+.table-scroll { max-width: 100%; margin-bottom: 16px; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+}
+.table th, .table td {
+  text-align: left;
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--border);
+}
+.table thead th {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-strong);
+}
+.muted { color: var(--text-muted); font-size: 0.9em; font-weight: 400; }
+
+/* --- Tabla de detalle de la tarifa --- */
+/* La tabla se ajusta al ancho que haya: nunca pide desplazamiento lateral.
+   Las columnas de dinero se dejan estrechas y el nombre del tramo parte
+   linea si hace falta. */
+.table-detalle {
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 0;
+  table-layout: fixed;
+}
+.table-detalle th:first-child, .table-detalle td:first-child { width: 24%; }
+.table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 13%; }
+.table-detalle td:first-child, .table-detalle td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+.table-detalle td.num, .table-detalle th:nth-child(n+3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.table-detalle td:first-child { font-weight: 500; }
+.table-detalle td:nth-child(2) {
+  color: var(--text-muted);
+  font-size: 0.92em;
+}
+
+/* renglon en blanco que separa los bloques */
+.fila-separadora td {
+  padding: 0;
+  height: 10px;
+  border-bottom: none;
+}
+
+.fila-subtotal td {
+  font-weight: 700;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border-strong);
+}
+.fila-total td {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+  background: var(--surface-3);
+  border-top: 2px solid var(--navy-2);
+  border-bottom: 2px solid var(--navy-2);
+}
+/* mas especifico que .table-detalle td:first-child, que si no le gana */
+.table-detalle /* aviso de los tramos sin cargo que no se listan */
+.tabla-nota {
+  margin: 8px 2px 0;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+.tabla-nota[hidden] { display: none; }
+
+.fila-usd td {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* ---------- Mapa ---------- */
+/* El mapa va dentro del panel de resultado, debajo de la ruta. La caja de
+   referencias flota sobre el espacio vacio de su esquina inferior izquierda. */
+.mapa-marco {
+  position: relative;
+  min-width: 0;
+  background: var(--mapa-fondo);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+}
+#mapa {
+  width: 100%;
+  min-width: 0;
+  max-width: 640px;
+  height: auto;
+  display: block;
+}
+
+.caja-mapa {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  /* Va en la esquina inferior derecha, sobre el vacio de la Orinoquia. El
+     scroll interno es la red de seguridad si el contenido crece. */
+  width: 176px;
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(15, 37, 68, 0.10);
+  overflow: hidden;
+}
+.caja-mapa-cabecera {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+}
+.caja-mapa-cabecera:hover { color: var(--text); }
+.caja-mapa .chevron { transition: transform 0.15s; font-size: 0.8rem; }
+.caja-mapa.plegada .chevron { transform: rotate(-90deg); }
+.caja-mapa.plegada .caja-mapa-cuerpo { display: none; }
+.caja-mapa.plegada .caja-mapa-cabecera { border-bottom: none; }
+
+.caja-mapa-cuerpo { padding: 9px; overflow: auto; }
+.caja-ayuda {
+  margin: 0 0 8px;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.caja-mapa .leyenda-titulo { margin: 9px 0 5px; font-size: 0.62rem; }
+.caja-mapa .leyenda-titulo:first-of-type { margin-top: 0; }
+.caja-mapa .mapa-leyenda { font-size: 0.68rem; gap: 4px; }
+.caja-mapa .mapa-nota { margin-top: 9px; font-size: 0.62rem; line-height: 1.45; }
+.caja-mapa-cabecera { padding: 6px 9px; font-size: 0.64rem; }
+
+@media (max-width: 620px) {
+  /* en pantallas angostas la caja taparia el mapa: pasa a ir debajo */
+  .caja-mapa { position: static; width: 100%; max-width: none; margin-top: 10px; max-height: none; }
+  .mapa-marco { flex-direction: column; align-items: stretch; }
+}
+
+.leyenda-titulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 16px 0 8px;
+}
+.mapa-leyenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.mapa-leyenda li { display: flex; align-items: center; gap: 9px; }
+.leyenda-linea { width: 22px; height: 3px; border-radius: 2px; flex: none; }
+.leyenda-linea.l-tgi { background: var(--tgi); }
+.leyenda-linea.l-promigas { background: var(--promigas); }
+.leyenda-linea.l-activa {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--ruta) 0 6px, #fff 6px 10px);
+  outline: 1px solid var(--ruta);
+}
+.leyenda-punto {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  background: var(--surface); border: 2px solid var(--text-muted);
+}
+.leyenda-punto.p-origen { background: #ffffff; border-color: #10141c; }
+.leyenda-punto.p-destino { background: #10141c; border-color: #10141c; }
+.leyenda-punto.p-entrada { background: var(--surface); border-color: var(--azul); border-style: dashed; }
+.leyenda-punto.p-normal { background: var(--surface); border-color: var(--border-strong); }
+
+.mapa-nota {
+  margin: 18px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.mapa-nota code {
+  font-size: 0.95em;
+  background: var(--surface-3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* --- Zoom sobre la ruta, debajo del localizador --- */
+.zoom-mapa {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(15, 37, 68, 0.12);
+}
+.zoom-mapa[hidden] { display: none; }
+.btn-zoom {
+  width: 24px;
+  height: 24px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--navy-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.btn-zoom:hover:not(:disabled) { background: var(--surface-2); }
+.btn-zoom:disabled { opacity: 0.35; cursor: default; }
+.zoom-nivel {
+  min-width: 26px;
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* --- Croquis de Colombia --- */
+/* Paises vecinos: son contexto, van por detras de Colombia y sin nombre. */
+.croquis-vecino {
+  fill: var(--mapa-vecino);
+  stroke: var(--mapa-vecino-borde);
+  stroke-width: 0.8;
+}
+.croquis-lago {
+  /* sin color propio: se ve como el mar, recortando el relleno de Venezuela */
+  fill: var(--mapa-fondo);
+  stroke: var(--mapa-vecino-borde);
+  stroke-width: 0.6;
+}
+
+/* --- Nombres sobre el mapa: lago, mares y paises vecinos --- */
+.rotulo { pointer-events: none; }
+
+.rotulo-mar {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  fill: var(--rotulo);
+}
+.rotulo-pais {
+  font-size: 8px;
+  font-weight: 500;
+  fill: #7c8699;
+}
+
+.rotulo-lago {
+  font-size: 6px;
+  font-weight: 600;
+  fill: var(--rotulo);
+}
+
+.croquis-relleno { fill: var(--mapa-tierra); stroke: none; }
+.croquis-depto { fill: none; stroke: var(--mapa-depto); stroke-width: 0.7; opacity: 0.8; }
+.croquis-borde { fill: none; stroke: var(--mapa-borde); stroke-width: 1.1; }
+
+/* --- Localizador: donde cae el recorte dentro del pais --- */
+.inset-fondo {
+  fill: #ffffff;
+  stroke: #b9bfd0;
+  stroke-width: 0.8;
+}
+.inset-pais {
+  fill: var(--inset-tierra);
+  stroke: none;
+}
+/* limites departamentales dentro del localizador, como en la lamina */
+.inset-depto {
+  fill: none;
+  stroke: var(--inset-depto);
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+/* recuadro de la zona enfocada: borde gris fino y relleno azul muy tenue */
+.inset-marco {
+  fill: var(--ruta);
+  fill-opacity: 0.11;
+  stroke: #6f7787;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* --- Gasoductos --- */
+.tramo-base {
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+.tramo-TGI { stroke: var(--tgi); }
+.tramo-PROMIGAS { stroke: var(--promigas); }
+/* La ruta calculada va toda del mismo azul, aunque cruce los dos
+   transportadores: gana en especificidad a .tramo-TGI / .tramo-PROMIGAS. */
+.tramo-base.activo {
+  stroke: var(--ruta);
+  stroke-width: 3.8;
+  opacity: 1;
+}
+
+/* Línea de flujo: invisible salvo cuando el tramo está en la ruta calculada.
+   El desplazamiento del guion da la sensación de gas moviéndose origen → destino. */
+.tramo-flujo {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-dasharray: 6 10;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.tramo-flujo.activo {
+  opacity: 1;
+  animation: fluir 0.75s linear infinite;
+}
+@keyframes fluir {
+  from { stroke-dashoffset: 16; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* --- Ping de radar en el origen y el destino ---
+   Dos anillos que se expanden y se desvanecen, desfasados entre si. Solo se
+   encienden en los dos extremos de la ruta; en el resto de puntos no existen. */
+.ping {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mapa-nodo.es-origen .ping,
+.mapa-nodo.es-destino .ping {
+  animation: ping 1.4s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+.mapa-nodo.es-origen .ping { color: #ffffff; }
+.mapa-nodo.es-destino .ping { color: #10141c; }
+.mapa-nodo.es-origen .ping-2,
+.mapa-nodo.es-destino .ping-2 { animation-delay: 0.7s; }
+
+@keyframes ping {
+  0%   { transform: scale(0.45); opacity: 0.95; }
+  60%  { transform: scale(2.6);  opacity: 0.25; }
+  100% { transform: scale(3.6);  opacity: 0; }
+}
+
+/* el punto en si tambien late, suave */
+.mapa-nodo.es-origen .punto,
+.mapa-nodo.es-destino .punto {
+  animation: latido 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes latido {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.35); }
+}
+
+/* --- Puntos --- */
+.mapa-nodo { cursor: pointer; }
+.mapa-nodo:focus { outline: none; }
+.punto {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.6;
+  transition: r 0.15s;
+}
+.punto-TGI { stroke: var(--tgi); }
+.punto-PROMIGAS { stroke: var(--promigas); }
+
+/* El nombre tambien responde al clic, no solo el circulito.
+   Sin halo detras: el borde del color de la tierra se veia como un recuadro
+   cuando el nombre caia sobre el mar. */
+.punto-etiqueta {
+  font-size: 8.5px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  cursor: pointer;
+}
+.punto-guia {
+  stroke: var(--text-muted);
+  stroke-width: 0.6;
+  opacity: 0.6;
+}
+
+.mapa-nodo:hover .punto-etiqueta,
+.mapa-nodo:focus .punto-etiqueta { fill: var(--text); font-size: 9.5px; }
+.mapa-nodo:hover .punto { stroke-width: 2.6; }
+.mapa-nodo:focus .punto { stroke: var(--navy-3); stroke-width: 2.6; }
+
+.mapa-nodo.en-ruta .punto { fill: var(--surface); stroke-width: 2.4; }
+.mapa-nodo.en-ruta .punto-etiqueta { fill: var(--text); }
+.mapa-nodo.es-entrada .punto {
+  stroke: var(--azul);
+  stroke-width: 2.4;
+  stroke-dasharray: 3 2;
+}
+.mapa-nodo.es-origen .punto { fill: #ffffff; stroke: #10141c; stroke-width: 2.2; }
+.mapa-nodo.es-destino .punto { fill: #10141c; stroke: #ffffff; stroke-width: 2.2; }
+.mapa-nodo.es-origen .punto-etiqueta,
+.mapa-nodo.es-destino .punto-etiqueta {
+  fill: var(--text);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* ---------- Detalle desplegable ---------- */
+.panel-tabla {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--surface-2);
+}
+.panel-tabla[hidden] { display: none; }
+.panel-tabla .table-scroll { margin-bottom: 0; overflow-x: visible; }
+.panel-tabla .table thead th { background: var(--surface-2); }
+
+/* renglon que pliega el detalle por transportador */
+.fila-toggle td {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--navy-2);
+  background: var(--surface);
+  user-select: none;
+}
+.fila-toggle:hover td { background: var(--surface-3); }
+.fila-toggle .chevron { font-size: 0.72em; }
+.detalle-plegado .fila-transp { display: none; }
+
+.fila-total-concepto td {
+  font-weight: 600;
+  background: var(--surface);
+}
+
+/* ---------- Tabla en pantallas angostas ----------
+   Misma estructura de seis columnas: solo se recorta el espacio desperdiciado
+   (margenes de la pagina y del panel) y se baja la letra, para que las cifras
+   partan lo menos posible. */
+@media (max-width: 700px) {
+  .layout { padding: 0 12px; gap: 14px; }
+  .panel { padding: 14px; }
+  .panel-tabla { padding: 8px; }
+
+  .table-detalle { font-size: 0.66rem; }
+  .table-detalle th, .table-detalle td { padding: 5px 4px; }
+  .table-detalle thead th { font-size: 0.56rem; letter-spacing: 0; }
+  /* la fila de Total traia 0.92rem del estilo de escritorio: aqui desbordaba */
+  .table-detalle .fila-total td { font-size: inherit; }
+  .table-detalle th:first-child, .table-detalle td:first-child { width: 25%; }
+  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 12%; }
+  .table-detalle td:nth-child(2) { font-size: 0.92em; }
+}
+
+@media (max-width: 430px) {
+  .layout { padding: 0 8px; }
+  .panel { padding: 10px; }
+  .panel-tabla { padding: 6px; }
+
+  .table-detalle { font-size: 0.6rem; }
+  .table-detalle th, .table-detalle td { padding: 4px 3px; }
+  .table-detalle thead th { font-size: 0.5rem; }
+  .table-detalle th:first-child, .table-detalle td:first-child { width: 20%; }
+  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 10%; }
+  /* el simbolo de moneda sobra aqui: el encabezado ya dice (COP) o USD */
+  .table-detalle .sim { display: none; }
+  /* las cifras pesan mas que el nombre: se les deja el ancho que sobra y no
+     se parten (el separador ya es un espacio duro) */
+  .table-detalle td.num { overflow-wrap: normal; white-space: nowrap; }
+}
+
+/* ---------- Pie ---------- */
+.footer {
+  max-width: 1180px;
+  margin: 0 auto 40px;
+  padding: 0 24px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+
+@media print {
+  .topbar .btn, .panel-form, .btn-secundario, .caja-mapa-cabecera { display: none; }
+  .panel-tabla { border: none; padding: 0; background: none; }
+  .btn-icono { display: none; }
+  /* en papel la ruta se ve completa, sin recorte */
+  .panel-cabecera .ruta-texto { white-space: normal; overflow: visible; }
+  .detalle-plegado .fila-transp { display: table-row; }
+  .layout { grid-template-columns: 1fr; }
+  body { background: #fff; }
+  .table-scroll { overflow: visible; }
+  .tramo-flujo.activo { animation: none; }
+}
