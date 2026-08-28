@@ -420,6 +420,10 @@ h1, h2, h3 { margin: 0; }
 }
 .muted { color: var(--text-muted); font-size: 0.9em; font-weight: 400; }
 
+/* nombre del tramo: en una linea aqui, partido origen/destino en el telefono */
+.tramo-o, .tramo-sep, .tramo-d { display: inline; }
+.th-angosto { display: none; }
+
 /* --- Tabla de detalle de la tarifa --- */
 /* La tabla se ajusta al ancho que haya: nunca pide desplazamiento lateral.
    Las columnas de dinero se dejan estrechas y el nombre del tramo parte
@@ -874,12 +878,38 @@ h1, h2, h3 { margin: 0; }
 
   .table-detalle { font-size: 0.66rem; }
   .table-detalle th, .table-detalle td { padding: 5px 4px; }
-  .table-detalle thead th { font-size: 0.56rem; letter-spacing: 0; }
+  /* los encabezados se parten en varias lineas en vez de encimarse */
+  .table-detalle thead th {
+    font-size: 0.56rem;
+    letter-spacing: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    vertical-align: bottom;
+  }
+  /* "Transportador" no cabe: se usa la version corta */
+  .th-ancho { display: none; }
+  .th-angosto { display: inline; }
+
   /* la fila de Total traia 0.92rem del estilo de escritorio: aqui desbordaba */
   .table-detalle .fila-total td { font-size: inherit; }
-  .table-detalle th:first-child, .table-detalle td:first-child { width: 25%; }
-  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 12%; }
-  .table-detalle td:nth-child(2) { font-size: 0.92em; }
+
+  .table-detalle th:first-child, .table-detalle td:first-child { width: 26%; }
+  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 14%; }
+
+  /* El transportador no se parte a la mitad ("PROM" / "IGAS"): se permite
+     saltar de linea, pero solo entre palabras. Asi "PROMIGAS" queda entero y
+     "TGI + PROMIGAS" se reparte en dos renglones. */
+  .table-detalle td:nth-child(2) {
+    font-size: 0.85em;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+
+  /* el tramo queda con el origen arriba y el destino abajo */
+  .table-detalle td:first-child { overflow-wrap: normal; }
+  .tramo-sep { display: none; }
+  .tramo-o, .tramo-d { display: block; }
 }
 
 @media (max-width: 430px) {
@@ -890,8 +920,8 @@ h1, h2, h3 { margin: 0; }
   .table-detalle { font-size: 0.6rem; }
   .table-detalle th, .table-detalle td { padding: 4px 3px; }
   .table-detalle thead th { font-size: 0.5rem; }
-  .table-detalle th:first-child, .table-detalle td:first-child { width: 20%; }
-  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 10%; }
+  .table-detalle th:first-child, .table-detalle td:first-child { width: 26%; }
+  .table-detalle th:nth-child(2), .table-detalle td:nth-child(2) { width: 14%; }
   /* el simbolo de moneda sobra aqui: el encabezado ya dice (COP) o USD */
   .table-detalle .sim { display: none; }
   /* las cifras pesan mas que el nombre: se les deja el ancho que sobra y no

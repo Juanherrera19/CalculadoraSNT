@@ -24,10 +24,11 @@
   let tablaParaImagen = [];
   let contextoTabla = null;
 
+  // Tarjetas de total: mismos decimales que la tabla (1 en COP, 2 en USD)
   const fmtCOP = (n) =>
-    "$ " + n.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    "$ " + n.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const fmtUSD = (n) =>
-    "USD " + n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    "USD " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtPct = (n) => (n * 100).toLocaleString("es-CO", { maximumFractionDigits: 2 }) + "%";
   // En la tabla los importes van mas cortos que en las tarjetas, para que
   // quepan las seis columnas sin desplazamiento lateral.
@@ -232,9 +233,18 @@
       (d) => d.fijoPonderado + d.variablePonderado + d.aomIncluido >= SIN_TARIFA);
     const omitidos = detalle.length - conCargo.length;
 
+    // El nombre va en tres partes para que en el telefono el origen quede en
+    // una linea y el destino en la siguiente, en vez de partirse a la mitad de
+    // una palabra. El separador se oculta ahi, pero sigue en el texto plano
+    // que se usa para el PNG.
+    const nombreTramo = (d) =>
+      `<span class="tramo-o">${d.origen}</span>` +
+      `<span class="tramo-sep"> - </span>` +
+      `<span class="tramo-d">${d.destino}</span>`;
+
     conCargo.forEach((d) => {
       fila([
-        d.ruta,
+        nombreTramo(d),
         d.transportador,
         copTabla(d.fijoPonderado),
         copTabla(d.variablePonderado),
